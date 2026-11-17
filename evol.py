@@ -1,6 +1,9 @@
 from dataclasses import dataclass
+from typing import Any
 import numpy as np
 
+RNG_SEED = 42
+rng = np.random.default_rng(RNG_SEED)
 
 @dataclass
 class EvolParams:
@@ -9,13 +12,21 @@ class EvolParams:
     mutation_prob:float
     no_generations:int
 
-@dataclass
+@dataclass(init=False)
 class Chromosome:
     values:np.ndarray
     fitness:float
+    id = 0
+    next_id = 0
+    def __init__(self, values:np.ndarray) -> None:
+        self.values = values
+        self.fitness = 0
+        self.id = self.next_id
+        Chromosome.next_id += 1
+    
 
 def generate_individual(l:int,C:int):
-    return np.random.uniform(0,C,l)
+    return rng.uniform(0,C,l)
 
 
 def delta_plus(yi:int):
@@ -77,17 +88,45 @@ def fitness(a:np.ndarray,R:np.ndarray):
     s = a @ R @ a     
     return -np.sum(a) + 0.5*s
     
-def init(params:EvolParams,y:np.ndarray,R:np.ndarray,l:int,C:int):
+def init_pop(params:EvolParams,y:np.ndarray,l:int,C:int):
     pop = []
     for _ in range(params.no_chrom):
         chrom_values = generate_individual(l,C)
         chrom_values = adjust_individual(chrom_values,y)
-        chrom_fitness = fitness(chrom_values,R)
-        pop.append(Chromosome(chrom_values,chrom_fitness))
+        pop.append(Chromosome(chrom_values))
     return pop
 
+def calculate_pop_fitness(pop:list[Chromosome],R:np.ndarray):
+    for chromosome in pop:
+        chromosome.fitness = fitness(chromosome.values,R)
+    return pop
+
+def most_adapted_individual(pop:list[Chromosome]):
+    sorted_pop = sorted(pop,key=lambda c : -c.fitness) #se urmareste obtinerea valorii minime
+    return sorted_pop[0]
+
+def selection_competition(pop:list[Chromosome],k=2):
+    len_pop = len(pop)
+    parents = []
+    for _ in range(2*len_pop):
+        competition = []
+        for _ in range(k):
+            random_idx = rng.integers(0,len_pop)
+            random_chrom = pop[random_idx]
+            while random_chrom in competition:
+                random_idx = rng.integers(0,len_pop)
+                random_chrom = pop[random_idx]
+            
+            parents.append(most_adapted_individual(competition))
+    return parents
+
 def evolutionary_algorithm(
-    X,y,C:int,params:EvolParams
+    X,y,C:int,l:int,params:EvolParams
 ):
     R = precompute_R(X,y)
+    pop = init_pop(params,y,l,C)
+    pop = calculate_pop_fitness(pop,R)
+    
     for _ in range(params.no_generations):
+        new_pop = []
+        parents = selection_competition(pop)
