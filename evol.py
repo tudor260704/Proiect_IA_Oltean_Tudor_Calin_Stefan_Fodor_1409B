@@ -9,6 +9,11 @@ class EvolParams:
     mutation_prob:float
     no_generations:int
 
+@dataclass
+class Chromosome:
+    values:np.ndarray
+    fitness:float
+
 def generate_individual(l:int,C:int):
     return np.random.uniform(0,C,l)
 
@@ -47,21 +52,42 @@ def adjust_individual(a:np.ndarray,y:np.ndarray,eps=1e-8):
         if s_plus > s_minus:
            k = np.random.randint(0,l) 
            while y[k] != 1:
-            k = np.random.randint(0,l) 
+             k = np.random.randint(0,l) 
         else:
             k = np.random.randint(0,l) 
             while y[k] != -1:
               k = np.random.randint(0,l)
         
         if a_new[k] > s:
-           a_new[k] = a_new[k] 
+           a_new[k] = a_new[k] - s 
         else:
            a_new[k] = 0
         
         s = np.dot(a_new,y)
     return a_new
 
-def evolutionary(
+
+#notam cu R partea din functia de fitness care depinde de X si y care este constanta pentru toti cromozomii
+def precompute_R(X:np.ndarray,y:np.ndarray) -> np.ndarray:
+    K = X @ X.T #obtinem xiT*xj in matricea K
+    Y = np.outer(y,y) # obtinem yi*yj in matricea Y
+    return Y*K
+
+def fitness(a:np.ndarray,R:np.ndarray):
+    s = a @ R @ a     
+    return -np.sum(a) + 0.5*s
+    
+def init(params:EvolParams,y:np.ndarray,R:np.ndarray,l:int,C:int):
+    pop = []
+    for _ in range(params.no_chrom):
+        chrom_values = generate_individual(l,C)
+        chrom_values = adjust_individual(chrom_values,y)
+        chrom_fitness = fitness(chrom_values,R)
+        pop.append(Chromosome(chrom_values,chrom_fitness))
+    return pop
+
+def evolutionary_algorithm(
     X,y,C:int,params:EvolParams
 ):
-    pass
+    R = precompute_R(X,y)
+    for _ in range(params.no_generations):
